@@ -1,0 +1,142 @@
+---
+title: "Practical Machine Learning - Final Project"
+author: "Frank Ambrosio"
+date: "May 7, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+###Assignment
+One thing that people regularly do is quantify how much of a particular activity they do, but they neglect to quantify how well they do it. In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which they did the exercise. Our machine learning algorithm will be applied to the 20 test cases available in the test data.
+
+###Background
+In this data set the variable representing the outcome, and the variable that we want to predict, is "classe", a factor variable with 5 levels(A,B,C,D,E). To gather this data, participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in 5 different fashions:
+-exactly according to the specification (Class A)
+-throwing the elbows to the front (Class B)
+-lifting the dumbbell only halfway (Class C)
+-lowering the dumbbell only halfway (Class D)
+-throwing the hips to the front (Class E)
+Accelerometers located at various points about the participant and their dumbell recorded data which we will use to predict which "classe" the data comes from.
+
+###Approach
+Using Practical Machine Learning techniques we will use the accelerometer data provided at the following links to train models which will predict the manner in which certain exercises were performed.
+#####Data:
+training: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+testing: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+###Loading Packages
+To reproduce the results of this code certain packages must be installed and loaded. 
+```{r}
+library(caret)
+library(rpart)
+library(randomForest)
+library(rattle)
+```
+
+###Loading the Data
+The data from this project comes from this source:
+http://groupware.les.inf.puc-rio.br/har
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+Here we load the data sets into R, and tidy up the blank, NA and undefined values:
+```{r}
+training <- read.csv(url('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'), na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv(url('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'), na.strings=c("NA","#DIV/0!",""))
+```
+
+###Preprocessing the data
+The training data set must be split into a training and (preliminary) testing set at a 60/40 ratio respectively (seed set for reproducibility).
+```{r}
+set.seed(111)
+```
+Predictor variables with little or no values in their columns must be removed.
+```{r}
+training <-training[,colSums(is.na(training)) == 0]
+testing <-testing[,colSums(is.na(testing)) == 0]
+```
+Here we partition the training data into training (mod_training) and validation (mod_testing) data sets.
+```{r}
+inTrain <- createDataPartition(y=training$classe, p=0.6, list=FALSE)
+mod_training <- training[inTrain, ] 
+mod_testing <- training[-inTrain, ]
+finalmod_testset <- testing
+```
+The first seven columns of the data set are not accelerometor measurement data. These columns must be removed because only data measurements should be included in the machine learning algorithm. We perform this transformation on our final model test data set as well.
+```{r}
+mod_training <- mod_training[,-c(1:7)]
+mod_testing <- mod_testing[,-c(1:7)]
+finalmod_testset <- finalmod_testset[,-c(1:7)]
+```
+###Prediction Models
+In these models we will be using the accelerometer data to predict the quality of the exercise which is represented in the variable "classe".
+
+####Prediction Model 1
+Decision Tree
+Model:
+```{r}
+mod1 <- rpart(classe ~ ., data = mod_training, method = 'class')
+```
+Prediction:
+```{r}
+pred1 <- predict(mod1, mod_testing, type = 'class')
+```
+Results:
+```{r}
+confusionMatrix(pred1, mod_testing$classe)
+```
+The accuracy of this Decision Tree algorithm has been determined to be 0.7545 and the Estimated Out of Sample Error to be 0.2455.
+
+####Prediction Model 2
+Random Forest
+Model:
+```{r}
+mod2 <- randomForest(classe ~ ., data = mod_training, method = 'class')
+```
+Prediction:
+```{r}
+pred2 <- predict(mod2, mod_testing, type = 'class')
+```
+Results:
+```{r}
+confusionMatrix(pred2, mod_testing$classe)
+```
+The accuracy of this Random Forest algorithm has been determined to be 0.9929 and the Estimated Out of Sample Error to be 0.0071.
+
+#####Model Comparison
+Because the accuracy of the Random Forest algorithm is greater than the accuracy of the Decision Tree algorithm we will proceed with the Random Forest Algorithm.
+
+###Validation
+Here we apply our algorithm with cross validation. We use the mod_testing data set to cross validate our model.
+####Prediction Model 3
+Random Forest with Cross Validation
+Model:
+```{r}
+mod3 <- train(classe ~ ., data = mod_training, method = "rf", trControl = trainControl(method = "cv", 5), ntree = 250)
+```
+Prediction:
+```{r}
+pred3 <- predict(mod3, mod_testing)
+```
+Results:
+```{r}
+confusionMatrix(mod_testing$classe, pred3)
+```
+The accuracy of this Random Forest algorithm has been determined to be 0.989 and the Estimated Out of Sample Error to be 0.011
+
+
+Ultimately we must test our model on a set of data that has not been used at all throughout the building of this model. Fortunately we partitioned a set of testing data and saved it for our final model. Here we will attempt to use the model to make predictions with a test set it has never seen before.
+
+Prediction:
+```{r}
+pred4 <- predict(mod3, finalmod_testset)
+pred4
+```
